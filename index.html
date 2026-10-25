@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DFA Slot Tracker & Speed Assistant</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            dfaBlue: {
+              50: '#f0f7ff',
+              100: '#e0effe',
+              500: '#0284c7',
+              600: '#0265a3',
+              800: '#1e3a8a',
+              900: '#0f172a'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    body { font-family: 'Inter', sans-serif; }
+    .animate-pulse-fast { animation: pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+  </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-full flex flex-col antialiased">
+
+  <!-- Header / Navigation -->
+  <header class="bg-slate-800/80 backdrop-blur-md border-b border-slate-700 sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex flex-wrap items-center justify-between gap-4">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-blue-500/30">
+          <i class="fa-solid fa-passport"></i>
+        </div>
+        <div>
+          <h1 class="font-bold text-lg leading-tight text-white flex items-center gap-2">
+            DFA Slot Assistant
+            <span class="bg-blue-500/20 text-blue-400 text-xs px-2 py-0.5 rounded-full border border-blue-500/30 font-medium">3-Applicant Mode</span>
+          </h1>
+          <p class="text-xs text-slate-400">Appointment Monitor & Fast Auto-Fill Companion</p>
+        </div>
+      </div>
+
+      <div class="flex items-center space-x-3">
+        <!-- Direct DFA Portal Button -->
+        <a href="https://www.passport.gov.ph/appointment/individual/schedule" target="_blank" rel="noopener noreferrer" 
+           class="bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold px-4 py-2 rounded-lg flex items-center gap-2 shadow-lg shadow-blue-600/20 transition-all duration-200">
+          <i class="fa-solid fa-external-link-alt"></i> Open Passport Portal
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Notification Banner / Information -->
+  <div class="bg-amber-950/40 border-b border-amber-500/30 px-4 py-2.5">
+    <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs text-amber-200/90">
+      <div class="flex items-center gap-2">
+        <i class="fa-solid fa-triangle-exclamation text-amber-400 shrink-0"></i>
+        <span><strong>Technical Notice:</strong> Direct client-side web scraping of <code>passport.gov.ph</code> is blocked by browser CORS security & DFA Cloudflare guards. Use this tool as a sync dashboard, manual refresh sound-pinger, and ultra-fast snippet copy-vault for your 3 applicants.</span>
+      </div>
+    </div>
+  </div>
+
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-grow space-y-6 w-full">
+
+    <!-- Top Grid: Controls & Timer -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+      
+      <!-- System Control Panel -->
+      <div class="bg-slate-800 rounded-xl border border-slate-700 p-5 shadow-lg flex flex-col justify-between">
+        <div>
+          <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-4 flex items-center gap-2">
+            <i class="fa-solid fa-sliders text-blue-400"></i> Alert Settings & Permissions
+          </h2>
+          
+          <div class="space-y-4">
+            <!-- Browser Notification Toggle -->
+            <div class="flex items-center justify-between p-3 bg-slate-900/60 rounded-lg border border-slate-700/60">
+              <div class="flex items-center gap-2.5">
+                <i class="fa-solid fa-bell text-slate-400" id="notif-icon"></i>
+                <span class="text-xs font-medium">Desktop Notifications</span>
+              </div>
+              <button id="btn-request-notif" onclick="toggleNotifications()" class="text-xs bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded-md font-medium transition">
+                Enable
+              </button>
+            </div>
+
+            <!-- Audio Alert Toggle -->
+            <div class="flex items-center justify-between p-3 bg-slate-900/60 rounded-lg border border-slate-700/60">
+              <div class="flex items-center gap-2.5">
+                <i class="fa-solid fa-volume-high text-slate-400"></i>
+                <span class="text-xs font-medium">Audio Alert Ping</span>
+              </div>
+              <button id="btn-toggle-sound" onclick="toggleAudio()" class="text-xs bg-emerald-700 text-white px-3 py-1.5 rounded-md font-medium transition">
+                Audio ON
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-4 pt-3 border-t border-slate-700/60 flex items-center justify-between text-xs text-slate-400">
+          <span>Status: <strong id="sys-status" class="text-emerald-400">Active</strong></span>
+          <button onclick="playTestPing()" class="text-blue-400 hover:underline">Test Audio Sound</button>
+        </div>
+      </div>
+
+      <!-- Manual Refresh Remind Timer -->
+      <div class="bg-slate-800 rounded-xl border border-slate-700 p-5 shadow-lg flex flex-col justify-between">
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+              <i class="fa-solid fa-stopwatch text-emerald-400"></i> DFA Page Refresh Timer
+            </h2>
+            <span class="text-xs bg-emerald-950 text-emerald-400 border border-emerald-800 px-2 py-0.5 rounded-full font-mono" id="timer-display">00:30</span>
+          </div>
+          <p class="text-xs text-slate-400 mb-4">Set a sound alarm to remind you to hit Refresh (F5) on your official DFA tab before session timeout.</p>
+          
+          <div class="grid grid-cols-3 gap-2 mb-4">
+            <button onclick="setTimerInterval(30)" class="timer-btn bg-blue-600 text-white text-xs py-1.5 rounded-md font-medium">30s</button>
+            <button onclick="setTimerInterval(60)" class="timer-btn bg-slate-700 text-slate-300 text-xs py-1.5 rounded-md font-medium">60s</button>
+            <button onclick="setTimerInterval(120)" class="timer-btn bg-slate-700 text-slate-300 text-xs py-1.5 rounded-md font-medium">2 mins</button>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button id="btn-timer-toggle" onclick="toggleRefreshTimer()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs py-2 rounded-lg font-semibold transition">
+            Start Refresh Alarm
+          </button>
+          <button onclick="resetTimer()" class="bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs px-3 py-2 rounded-lg">
+            <i class="fa-solid fa-rotate"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Quick Slot Simulator & Target Summary -->
+      <div class="bg-slate-800 rounded-xl border border-slate-700 p-5 shadow-lg flex flex-col justify-between">
+        <div>
+          <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-2 flex items-center gap-2">
+            <i class="fa-solid fa-bolt text-amber-400"></i> Simulator & Slot Alert Trigger
+          </h2>
+          <p class="text-xs text-slate-400 mb-4">Simulate an instant slot opening for 3+ applicants to test browser alerts and audio cues.</p>
+          
+          <div class="p-3 bg-slate-900/80 rounded-lg border border-slate-700 text-xs space-y-1 mb-4">
+            <div class="flex justify-between">
+              <span class="text-slate-400">Target Requirements:</span>
+              <span class="text-amber-400 font-bold">3 Consecutive Slots</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-slate-400">Monitored Locations:</span>
+              <span class="text-white font-medium" id="monitored-count">4 Sites</span>
+            </div>
+          </div>
+        </div>
+
+        <button onclick="triggerSimulatedSlotAlert()" class="w-full bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white text-xs py-2.5 rounded-lg font-bold shadow-lg shadow-amber-600/20 transition">
+          <i class="fa-solid fa-circle-play mr-1"></i> Simulate 3-Slot Opening Alert
+        </button>
+      </div>
+
+    </div>
+
+    <!-- Section: Target Consular Sites Monitor Board -->
+    <div class="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden shadow-lg">
+      <div class="px-5 py-4 border-b border-slate-700 flex flex-wrap items-center justify-between gap-3 bg-slate-800/50">
+        <div>
+          <h2 class="font-bold text-slate-100 text-base flex items-center gap-2">
+            <i class="fa-solid fa-location-dot text-red-400"></i> Consular Site Monitor List
+          </h2>
+          <p class="text-xs text-slate-400">Log and track the sites you are currently watching for 3 available slots.</p>
+        </div>
+        <button onclick="openAddSiteModal()" class="bg-slate-700 hover:bg-slate-600 text-white text-xs px-3 py-2 rounded-lg font-medium flex items-center gap-1.5 border border-slate-600">
+          <i class="fa-solid fa-plus text-xs"></i> Add Consular Site
+        </button>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs text-slate-300">
+          <thead class="bg-slate-900/60 text-slate-400 uppercase font-medium border-b border-slate-700">
+            <tr>
+              <th class="py-3 px-4">Consular Site</th>
+              <th class="py-3 px-4">Region / Location</th>
+              <th class="py-3 px-4">Target Date Range</th>
+              <th class="py-3 px-4">Slots Needed</th>
+              <th class="py-3 px-4">Status</th>
+              <th class="py-3 px-4 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="site-table-body" class="divide-y divide-slate-700/50">
+            <!-- Table rows populated dynamically -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Section: Applicant Data Vault (3 Applicants) -->
+    <div class="bg-slate-800 rounded-xl border border-slate-700 p-5 shadow-lg space-y-4">
+      <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-700 pb-4">
+        <div>
+          <h2 class="font-bold text-slate-100 text-base flex items-center gap-2">
+            <i class="fa-solid fa-vault text-blue-400"></i> Applicant Data Vault (Fast Copy System)
+          </h2>
+          <p class="text-xs text-slate-400">Pre-fill details for all 3 applicants. Use the 1-click copy buttons to paste data rapidly when DFA slots open.</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="saveVaultData()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-3 py-2 rounded-lg font-medium flex items-center gap-1.5">
+            <i class="fa-solid fa-floppy-disk"></i> Save Details
+          </button>
+          <button onclick="copyAllAsText()" class="bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs px-3 py-2 rounded-lg font-medium flex items-center gap-1.5 border border-slate-600">
+            <i class="fa-solid fa-copy"></i> Copy All as Text
+          </button>
+        </div>
+      </div>
+
+      <!-- Applicant Tabs -->
+      <div class="flex space-x-2 border-b border-slate-700/60">
+        <button id="tab-btn-1" onclick="switchApplicantTab(1)" class="tab-btn px-4 py-2 text-xs font-semibold rounded-t-lg bg-blue-600 text-white border-b-2 border-blue-400">
+          <i class="fa-solid fa-user mr-1.5"></i> Applicant 1
+        </button>
+        <button id="tab-btn-2" onclick="switchApplicantTab(2)" class="tab-btn px-4 py-2 text-xs font-medium rounded-t-lg text-slate-400 hover:text-slate-200">
+          <i class="fa-solid fa-user mr-1.5"></i> Applicant 2
+        </button>
+        <button id="tab-btn-3" onclick="switchApplicantTab(3)" class="tab-btn px-4 py-2 text-xs font-medium rounded-t-lg text-slate-400 hover:text-slate-200">
+          <i class="fa-solid fa-user mr-1.5"></i> Applicant 3
+        </button>
+      </div>
+
+      <!-- Form Panels for Applicants -->
+      <div id="applicant-forms-container">
+        <!-- Rendered via JS -->
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Notification Toast Container -->
+  <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 max-w-sm"></div>
+
+  <!-- Add Consular Site Modal -->
+  <div id="site-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-800 border border-slate-700 rounded-xl max-w-md w-full p-6 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-700 pb-3">
+        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+          <i class="fa-solid fa-plus-circle text-blue-400"></i> Add Target Consular Site
+        </h3>
+        <button onclick="closeAddSiteModal()" class="text-slate-400 hover:text-white">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="block text-slate-300 font-medium mb-1">Consular Site Name</label>
+          <input type="text" id="modal-site-name" placeholder="e.g. DFA SM Manila / DFA Rob Galleria" 
+                 class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 focus:outline-none focus:border-blue-500">
+        </div>
+        <div>
+          <label class="block text-slate-300 font-medium mb-1">Region / Area</label>
+          <input type="text" id="modal-site-region" placeholder="e.g. Metro Manila / Cavite" 
+                 class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 focus:outline-none focus:border-blue-500">
+        </div>
+        <div>
+          <label class="block text-slate-300 font-medium mb-1">Target Date Range</label>
+          <input type="text" id="modal-site-dates" placeholder="e.g. Any date in Nov 2026" 
+                 class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 focus:outline-none focus:border-blue-500">
+        </div>
+      </div>
+
+      <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-700">
+        <button onclick="closeAddSiteModal()" class="bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs px-4 py-2 rounded-lg">Cancel</button>
+        <button onclick="saveNewSite()" class="bg-blue-600 hover:bg-blue-500 text-white text-xs px-4 py-2 rounded-lg font-semibold">Add Site</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Audio Alert Synth using Web Audio API (No external sound files required)
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    let audioCtx = null;
+    let audioEnabled = true;
+
+    function initAudio() {
+      if (!audioCtx) {
+        audioCtx = new AudioContext();
+      }
+    }
+
+    function playBeep(frequency = 880, duration = 0.2, type = 'sine') {
+      if (!audioEnabled) return;
+      try {
+        initAudio();
+        if (audioCtx.state === 'suspended') {
+          audioCtx.resume();
+        }
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(frequency, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
+        
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+      } catch (e) {
+        console.warn("Audio playback issue:", e);
+      }
+    }
+
+    function playSlotAlertSequence() {
+      if (!audioEnabled) return;
+      playBeep(523.25, 0.15); // C5
+      setTimeout(() => playBeep(659.25, 0.15), 150); // E5
+      setTimeout(() => playBeep(783.99, 0.15), 300); // G5
+      setTimeout(() => playBeep(1046.50, 0.4, 'triangle'), 450); // C6
+    }
+
+    function playTestPing() {
+      playBeep(880, 0.2);
+      showToast("Audio test ping played", "info");
+    }
+
+    function toggleAudio() {
+      audioEnabled = !audioEnabled;
+      const btn = document.getElementById('btn-toggle-sound');
+      if (audioEnabled) {
+        btn.textContent = "Audio ON";
+        btn.className = "text-xs bg-emerald-700 text-white px-3 py-1.5 rounded-md font-medium transition";
+        showToast("Audio alerts enabled", "success");
+      } else {
+        btn.textContent = "Audio OFF";
+        btn.className = "text-xs bg-slate-700 text-slate-400 px-3 py-1.5 rounded-md font-medium transition";
+        showToast("Audio alerts muted", "info");
+      }
+    }
+
+    // Web Desktop Notifications API
+    function toggleNotifications() {
+      if (!("Notification" in window)) {
+        showToast("Browser does not support desktop notifications", "error");
+        return;
+      }
+
+      if (Notification.permission === "granted") {
+        showToast("Desktop notifications are already enabled", "info");
+      } else if (Notification.permission !== "denied") {
+        Notification.requestPermission().then(permission => {
+          updateNotifUI();
+          if (permission === "granted") {
+            showToast("Desktop notifications granted!", "success");
+            new Notification("DFA Assistant Alert", {
+              body: "You will receive desktop alerts when 3 slots are detected!",
+              icon: "https://cdn-icons-png.flaticon.com/512/3063/3063822.png"
+            });
+          }
+        });
+      } else {
+        showToast("Notifications blocked in browser settings", "error");
+      }
+    }
+
+    function updateNotifUI() {
+      const btn = document.getElementById('btn-request-notif');
+      const icon = document.getElementById('notif-icon');
+      if ("Notification" in window && Notification.permission === "granted") {
+        btn.textContent = "Active";
+        btn.className = "text-xs bg-emerald-700 text-white px-3 py-1.5 rounded-md font-medium cursor-default";
+        icon.className = "fa-solid fa-bell text-emerald-400";
+      } else {
+        btn.textContent = "Enable";
+        btn.className = "text-xs bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-1.5 rounded-md font-medium transition";
+        icon.className = "fa-solid fa-bell text-slate-400";
+      }
+    }
+
+    // Timer Functionality
+    let timerInterval = null;
+    let timerSeconds = 30;
+    let currentTimerMax = 30;
+    let isTimerRunning = false;
+
+    function setTimerInterval(seconds) {
+      currentTimerMax = seconds;
+      resetTimer();
+    }
+
+    function resetTimer() {
+      timerSeconds = currentTimerMax;
+      updateTimerDisplay();
+    }
+
+    function updateTimerDisplay() {
+      const mins = Math.floor(timerSeconds / 60);
+      const secs = timerSeconds % 60;
+      const formatted = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+      document.getElementById('timer-display').textContent = formatted;
+    }
+
+    function toggleRefreshTimer() {
+      const btn = document.getElementById('btn-timer-toggle');
+      if (isTimerRunning) {
+        clearInterval(timerInterval);
+        isTimerRunning = false;
+        btn.textContent = "Start Refresh Alarm";
+        btn.className = "w-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs py-2 rounded-lg font-semibold transition";
+      } else {
+        initAudio();
+        isTimerRunning = true;
+        btn.textContent = "Stop Refresh Alarm";
+        btn.className = "w-full bg-red-600 hover:bg-red-500 text-white text-xs py-2 rounded-lg font-semibold transition";
+        
+        timerInterval = setInterval(() => {
+          if (timerSeconds > 0) {
+            timerSeconds--;
+            updateTimerDisplay();
+          } else {
+            // Alarm Triggered
+            playBeep(600, 0.3);
+            setTimeout(() => playBeep(900, 0.3), 300);
+            showToast("⏰ Refresh Time! Check your DFA Passport browser tab now.", "warning");
+            resetTimer();
+          }
+        }, 1000);
+      }
+    }
+
+    // Monitored Sites State & LocalStorage
+    let monitoredSites = [
+      { id: 1, name: "DFA SM Manila", region: "Metro Manila", dates: "Nov 2026", slotsNeeded: 3, status: "Checking..." },
+      { id: 2, name: "DFA Rob Galleria", region: "Metro Manila", dates: "Nov 2026", slotsNeeded: 3, status: "Checking..." },
+      { id: 3, name: "DFA Dasmariñas", region: "Cavite", dates: "Nov - Dec 2026", slotsNeeded: 3, status: "Checking..." },
+      { id: 4, name: "DFA Alabang (Metro South)", region: "Muntinlupa", dates: "Any Date", slotsNeeded: 3, status: "Checking..." }
+    ];
+
+    function renderSitesTable() {
+      const tbody = document.getElementById('site-table-body');
+      tbody.innerHTML = '';
+
+      monitoredSites.forEach(site => {
+        const tr = document.createElement('tr');
+        tr.className = "hover:bg-slate-700/30 transition-colors";
+        tr.innerHTML = `
+          <td class="py-3 px-4 font-semibold text-white">${escapeHtml(site.name)}</td>
+          <td class="py-3 px-4 text-slate-400">${escapeHtml(site.region)}</td>
+          <td class="py-3 px-4 text-slate-300 font-mono">${escapeHtml(site.dates)}</td>
+          <td class="py-3 px-4">
+            <span class="bg-blue-950 text-blue-400 border border-blue-800 px-2 py-0.5 rounded font-medium">${site.slotsNeeded} Slots</span>
+          </td>
+          <td class="py-3 px-4">
+            <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium ${
+              site.status.includes('AVAILABLE') 
+                ? 'bg-emerald-950 text-emerald-400 border border-emerald-800 animate-pulse' 
+                : 'bg-slate-700 text-slate-300'
+            }">
+              <span class="w-1.5 h-1.5 rounded-full ${site.status.includes('AVAILABLE') ? 'bg-emerald-400' : 'bg-slate-400'}"></span>
+              ${site.status}
+            </span>
+          </td>
+          <td class="py-3 px-4 text-right">
+            <button onclick="deleteSite(${site.id})" class="text-slate-400 hover:text-red-400 transition-colors p-1">
+              <i class="fa-solid fa-trash-can"></i>
+            </button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      document.getElementById('monitored-count').textContent = `${monitoredSites.length} Sites`;
+    }
+
+    function openAddSiteModal() {
+      document.getElementById('site-modal').classList.remove('hidden');
+    }
+
+    function closeAddSiteModal() {
+      document.getElementById('site-modal').classList.add('hidden');
+      document.getElementById('modal-site-name').value = '';
+      document.getElementById('modal-site-region').value = '';
+      document.getElementById('modal-site-dates').value = '';
+    }
+
+    function saveNewSite() {
+      const name = document.getElementById('modal-site-name').value.trim();
+      const region = document.getElementById('modal-site-region').value.trim() || 'General';
+      const dates = document.getElementById('modal-site-dates').value.trim() || 'Any Date';
+
+      if (!name) {
+        showToast("Please enter a Consular Site Name", "error");
+        return;
+      }
+
+      const newSite = {
+        id: Date.now(),
+        name,
+        region,
+        dates,
+        slotsNeeded: 3,
+        status: 'Checking...'
+      };
+
+      monitoredSites.push(newSite);
+      renderSitesTable();
+      closeAddSiteModal();
+      showToast(`Added ${name} to slot monitor list`, "success");
+    }
+
+    function deleteSite(id) {
+      monitoredSites = monitoredSites.filter(s => s.id !== id);
+      renderSitesTable();
+      showToast("Consular site removed", "info");
+    }
+
+    // Simulation Trigger
+    function triggerSimulatedSlotAlert() {
+      if (monitoredSites.length === 0) {
+        showToast("Add at least one site to test the simulator", "error");
+        return;
+      }
+
+      // Pick random site to trigger
+      const targetSite = monitoredSites[Math.floor(Math.random() * monitoredSites.length)];
+      targetSite.status = "🔥 3 SLOTS AVAILABLE!";
+
+      renderSitesTable();
+      playSlotAlertSequence();
+
+      // Trigger Desktop Notification if permitted
+      if ("Notification" in window && Notification.permission === "granted") {
+        new Notification("DFA PASSPORT SLOTS FOUND!", {
+          body: `ALERT: 3 Consecutive slots opened up at ${targetSite.name} (${targetSite.dates})!`,
+          icon: "https://cdn-icons-png.flaticon.com/512/3063/3063822.png"
+        });
+      }
+
+      showToast(`🔥 3 SLOTS OPENED AT ${targetSite.name.toUpperCase()}! Open DFA portal now!`, "success", 7000);
+
+      // Revert simulation status after 10 seconds
+      setTimeout(() => {
+        targetSite.status = "Checking...";
+        renderSitesTable();
+      }, 10000);
+    }
+
+    // Applicant Data Vault State & Storage
+    let activeTab = 1;
+    let applicantsData = {
+      1: { fullName: '', dob: '', email: '', mobile: '', birthPlace: '', motherName: '', fatherName: '', address: '' },
+      2: { fullName: '', dob: '', email: '', mobile: '', birthPlace: '', motherName: '', fatherName: '', address: '' },
+      3: { fullName: '', dob: '', email: '', mobile: '', birthPlace: '', motherName: '', fatherName: '', address: '' }
+    };
+
+    function loadSavedVaultData() {
+      const saved = localStorage.getItem('dfa_applicant_vault');
+      if (saved) {
+        try {
+          applicantsData = JSON.parse(saved);
+        } catch (e) {
+          console.error("Error loading saved data", e);
+        }
+      }
+    }
+
+    function saveVaultData() {
+      // First read current input values into memory
+      readFormInputsToState(activeTab);
+      localStorage.setItem('dfa_applicant_vault', JSON.stringify(applicantsData));
+      showToast("Applicant details saved securely in browser LocalStorage!", "success");
+    }
+
+    function readFormInputsToState(applicantId) {
+      const container = document.getElementById(`applicant-form-${applicantId}`);
+      if (!container) return;
+
+      const fields = ['fullName', 'dob', 'email', 'mobile', 'birthPlace', 'motherName', 'fatherName', 'address'];
+      fields.forEach(f => {
+        const input = document.getElementById(`app-${applicantId}-${f}`);
+        if (input) {
+          applicantsData[applicantId][f] = input.value;
+        }
+      });
+    }
+
+    function switchApplicantTab(applicantId) {
+      // Save current form inputs before switching
+      readFormInputsToState(activeTab);
+
+      activeTab = applicantId;
+
+      // Update tab styles
+      for (let i = 1; i <= 3; i++) {
+        const btn = document.getElementById(`tab-btn-${i}`);
+        if (i === applicantId) {
+          btn.className = "tab-btn px-4 py-2 text-xs font-semibold rounded-t-lg bg-blue-600 text-white border-b-2 border-blue-400";
+        } else {
+          btn.className = "tab-btn px-4 py-2 text-xs font-medium rounded-t-lg text-slate-400 hover:text-slate-200";
+        }
+      }
+
+      renderApplicantForms();
+    }
+
+    function renderApplicantForms() {
+      const container = document.getElementById('applicant-forms-container');
+      const data = applicantsData[activeTab];
+
+      container.innerHTML = `
+        <div id="applicant-form-${activeTab}" class="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-900/50 p-4 rounded-xl border border-slate-700/60">
+          
+          ${renderFieldInput(activeTab, 'fullName', 'Full Name (Last, First, Middle)', data.fullName, 'e.g. DELA CRUZ, JUAN PEDRO')}
+          ${renderFieldInput(activeTab, 'dob', 'Date of Birth (YYYY-MM-DD)', data.dob, '1995-08-15', 'date')}
+          ${renderFieldInput(activeTab, 'email', 'Email Address', data.email, 'juan.delacruz@gmail.com', 'email')}
+          ${renderFieldInput(activeTab, 'mobile', 'Mobile Phone Number', data.mobile, '09171234567', 'tel')}
+          ${renderFieldInput(activeTab, 'birthPlace', 'Place of Birth (City/Province)', data.birthPlace, 'e.g. Manila, Metro Manila')}
+          ${renderFieldInput(activeTab, 'motherName', "Mother's Maiden Name", data.motherName, 'e.g. MARIA SANTOS')}
+          ${renderFieldInput(activeTab, 'fatherName', "Father's Full Name", data.fatherName, 'e.g. JOSE DELA CRUZ')}
+          <div class="md:col-span-2">
+            ${renderFieldInput(activeTab, 'address', 'Complete Home Address', data.address, 'House No., Street, Barangay, City, Province')}
+          </div>
+
+        </div>
+      `;
+    }
+
+    function renderFieldInput(appId, fieldKey, label, value, placeholder, type = 'text') {
+      return `
+        <div>
+          <label class="block text-slate-300 text-xs font-medium mb-1">${label}</label>
+          <div class="flex items-center gap-1.5">
+            <input type="${type}" id="app-${appId}-${fieldKey}" value="${escapeHtml(value || '')}" placeholder="${placeholder}"
+                   oninput="applicantsData[${appId}]['${fieldKey}'] = this.value"
+                   class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-blue-500 font-mono">
+            <button onclick="copyToClipboard('app-${appId}-${fieldKey}', '${label}')" 
+                    title="Copy ${label}" 
+                    class="bg-slate-800 hover:bg-slate-700 border border-slate-600 text-blue-400 p-2 rounded-lg text-xs transition shrink-0 active:scale-95">
+              <i class="fa-solid fa-copy"></i>
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    function copyToClipboard(inputId, label) {
+      const input = document.getElementById(inputId);
+      if (!input || !input.value) {
+        showToast(`Field '${label}' is empty!`, "warning");
+        return;
+      }
+
+      input.select();
+      input.setSelectionRange(0, 99999); // Mobile compatibility
+
+      try {
+        // Fallback-safe copy method
+        document.execCommand('copy');
+        showToast(`Copied ${label}: "${input.value}"`, "success");
+      } catch (err) {
+        showToast("Failed to copy automatically", "error");
+      }
+    }
+
+    function copyAllAsText() {
+      readFormInputsToState(activeTab);
+      let textSummary = `=== DFA APPLICANTS DATA SUMMARY ===\n\n`;
+
+      for (let i = 1; i <= 3; i++) {
+        const d = applicantsData[i];
+        textSummary += `--- APPLICANT ${i} ---\n`;
+        textSummary += `Full Name: ${d.fullName || 'N/A'}\n`;
+        textSummary += `DOB: ${d.dob || 'N/A'}\n`;
+        textSummary += `Email: ${d.email || 'N/A'}\n`;
+        textSummary += `Mobile: ${d.mobile || 'N/A'}\n`;
+        textSummary += `Place of Birth: ${d.birthPlace || 'N/A'}\n`;
+        textSummary += `Mother's Name: ${d.motherName || 'N/A'}\n`;
+        textSummary += `Father's Name: ${d.fatherName || 'N/A'}\n`;
+        textSummary += `Address: ${d.address || 'N/A'}\n\n`;
+      }
+
+      // Create dummy element to execute copy
+      const tempTextArea = document.createElement("textarea");
+      tempTextArea.value = textSummary;
+      document.body.appendChild(tempTextArea);
+      tempTextArea.select();
+      document.execCommand("copy");
+      document.body.removeChild(tempTextArea);
+
+      showToast("Copied all 3 applicants' data to clipboard!", "success");
+    }
+
+    // Helper Utility: Toasts
+    function showToast(message, type = "info", duration = 4000) {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+
+      let bgClass = "bg-slate-800 border-slate-700 text-slate-100";
+      let icon = '<i class="fa-solid fa-info-circle text-blue-400"></i>';
+
+      if (type === "success") {
+        bgClass = "bg-emerald-950 border-emerald-800 text-emerald-200";
+        icon = '<i class="fa-solid fa-circle-check text-emerald-400"></i>';
+      } else if (type === "warning") {
+        bgClass = "bg-amber-950 border-amber-800 text-amber-200";
+        icon = '<i class="fa-solid fa-triangle-exclamation text-amber-400"></i>';
+      } else if (type === "error") {
+        bgClass = "bg-red-950 border-red-800 text-red-200";
+        icon = '<i class="fa-solid fa-circle-xmark text-red-400"></i>';
+      }
+
+      toast.className = `flex items-center gap-3 p-3.5 rounded-xl border shadow-xl text-xs font-medium transition-all duration-300 transform translate-y-2 opacity-0 ${bgClass}`;
+      toast.innerHTML = `${icon}<span class="flex-grow">${escapeHtml(message)}</span>`;
+
+      container.appendChild(toast);
+
+      // Animate in
+      requestAnimationFrame(() => {
+        toast.classList.remove('translate-y-2', 'opacity-0');
+      });
+
+      // Remove after duration
+      setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-y-2');
+        setTimeout(() => toast.remove(), 300);
+      }, duration);
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    // Initialize Web App
+    window.onload = function() {
+      loadSavedVaultData();
+      renderSitesTable();
+      renderApplicantForms();
+      updateNotifUI();
+      updateTimerDisplay();
+    };
+  </script>
+</body>
+</html>
